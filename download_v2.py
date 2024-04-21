@@ -20,6 +20,8 @@ import json
 import time
 from sys import argv
 import os
+import smtplib
+from email.message import EmailMessage
 
 REFRESH_TOKEN_PATH = Path(
     os.environ.get("REFRESH_TOKEN", "/opt/tesla-invoices/secrets/refresh_token.txt")
@@ -31,6 +33,14 @@ ACCESS_TOKEN_PATH = Path(
 ACCESS_TOKEN = ACCESS_TOKEN_PATH.read_text().strip()
 # path to save invoices
 INVOICE_PATH = Path(os.environ.get("INVOICE_PATH", "/opt/tesla-invoices/invoices/"))
+
+ENABLE_EMAIL_EXPORT = os.environ.get("ENABLE_EMAIL_EXPORT", "False").lower() == "true"
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "")
+EMAIL_TO = os.environ.get("EMAIL_TO", "")
+EMAIL_SERVER = os.environ.get("EMAIL_SERVER", "")
+EMAIL_SERVER_PORT = os.environ.get("EMAIL_SERVER_PORT", "587")
+EMAIL_USER = os.environ.get("EMAIL_USER", "")
+EMAIL_PASS = os.environ.get("EMAIL_PASS", "")
 
 
 def main():
@@ -138,6 +148,8 @@ def download_invoice(desired_invoice_date):
         url_charging_history = f"{url_charging_base}history?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vehicle['vin']}&operationName=getChargingHistoryV2"
         charging_sessions = base_req(url_charging_history)
         save_invoice(charging_sessions["data"], desired_invoice_date)
+        if ENABLE_EMAIL_EXPORT:
+            send_mails()
 
 
 def get_charging_invoice(charging_session_invoice_id, vin):
@@ -195,6 +207,31 @@ def get_vehicles():
         if "vin" in product:
             vehicles[product["vin"]] = product
     return vehicles
+
+
+def send_mails():
+    s = smtplib.SMTP(EMAIL_SERVER, EMAIL_SERVER_PORT)
+    s.ehlo()
+    s.starttls()
+    s.login(EMAIL_USER, EMAIL_PASS)
+
+
+
+    for invoice in INVOICE_PATH.glob("*.pdf"):
+        # TODO check if email for this invoice has already been sent
+        email = EmailMessage()
+
+        email["From"] = EMAIL_FROM
+        email["To"] = EMAIL_TO
+        email["Subject"] = "Tesla Invoice Export"
+        email.add_attachment(
+            invoice.read_bytes(),
+            maintype="application",
+            subtype="pdf",
+            filename=invoice.name,
+        )
+        s.send_message(email)
+        print(f"Sent Mail to {EMAIL_TO} for invoiec {invoice.name}")
 
 
 if __name__ == "__main__":
