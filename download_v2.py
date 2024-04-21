@@ -186,13 +186,17 @@ def save_invoice(charging_sessions, desired_invoice_date):
             for charging_session_invoice in charging_session_invoices:
                 charging_session_invoice_id = charging_session_invoice["contentId"]
                 charging_session_invoice_filename = charging_session_invoice["fileName"]
-                charging_invoice = get_charging_invoice(
-                    charging_session_invoice_id, charging_session["vin"]
-                )
 
                 local_file_path = (
                     INVOICE_PATH
                     / f"tesla_charging_invoice_{charging_session['vin']}_{charging_session_datetime.strftime('%Y-%m-%d')}_{charging_session_countrycode}_{charging_session_invoice_filename}"
+                )
+                if local_file_path.exists():
+                    # file already downloaded, skip
+                    continue
+                
+                charging_invoice = get_charging_invoice(
+                    charging_session_invoice_id, charging_session["vin"]
                 )
                 local_file_path.write_bytes(charging_invoice.content)
                 print(f"File '{local_file_path}' saved.")
@@ -215,10 +219,20 @@ def send_mails():
     s.starttls()
     s.login(EMAIL_USER, EMAIL_PASS)
 
-
-
     for invoice in INVOICE_PATH.glob("*.pdf"):
+        # look for a .json with the exact same name and path of the pdf
+        metadata_file = Path(str(invoice).replace(".pdf", ".json"))
         # TODO check if email for this invoice has already been sent
+        if metadata_file.exists():
+            metadata = json.load(metadata_file.open())
+        else:
+            metadata_file.touch()
+            metadata = {}
+
+        if "email_sent" in metadata:
+            # email already sent, skip this invoice
+            continue
+        
         email = EmailMessage()
 
         email["From"] = EMAIL_FROM
@@ -231,8 +245,9 @@ def send_mails():
             filename=invoice.name,
         )
         s.send_message(email)
-        print(f"Sent Mail to {EMAIL_TO} for invoiec {invoice.name}")
-
+        print(f"Sent Mail to {EMAIL_TO} for invoice {invoice.name}")
+        metadata["email_sent"] = int(time.time())
+        json.dump(metadata, metadata_file.open("w"), sort_keys=True, indent=4)
 
 if __name__ == "__main__":
     if len(argv) > 1:
