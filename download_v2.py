@@ -18,13 +18,19 @@ from pathlib import Path
 import base64
 import json
 import time
+from sys import argv
+import os
 
-REFRESH_TOKEN = open("/opt/tesla-invoices/secrets/refresh_token.txt").read()
-# REFRESH_TOKEN_PATH = Path("./refresh_token.txt")
-REFRESH_TOKEN = REFRESH_TOKEN_PATH.read_text()
-BEARER_TOKEN = open("/opt/tesla-invoices/secrets/access_token.txt").read()
-# BEARER_TOKEN_PATH = Path("./access_token.txt")
-BEARER_TOKEN = BEARER_TOKEN_PATH.read_text()
+REFRESH_TOKEN_PATH = Path(
+    os.environ.get("REFRESH_TOKEN", "/opt/tesla-invoices/secrets/refresh_token.txt")
+)
+REFRESH_TOKEN = REFRESH_TOKEN_PATH.read_text().strip()
+ACCESS_TOKEN_PATH = Path(
+    os.environ.get("ACCESS_TOKEN", "/opt/tesla-invoices/secrets/access_token.txt")
+)
+ACCESS_TOKEN = ACCESS_TOKEN_PATH.read_text().strip()
+# path to save invoices
+INVOICE_PATH = Path(os.environ.get("INVOICE_PATH", "/opt/tesla-invoices/invoices/"))
 
 
 def main():
@@ -33,7 +39,7 @@ def main():
 
 def base_req(url: str, method="get", json={}):
     headers = {
-        "Authorization": f"Bearer {BEARER_TOKEN}",
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
         # "x-tesla-user-agent": "TeslaApp/4.28.3-2167",
     }
     result = requests.request(method=method, url=url, headers=headers, json=json)
@@ -41,21 +47,23 @@ def base_req(url: str, method="get", json={}):
     try:
         return result.json()
     except Exception as e:
-        print(e)
-        return result.text()
+        # not json, could be text or binary(PDF)
+        return result
+
 
 def jwt_decode(token: str):
     # get the second part of the jwt token
-    payload = token.split('.')[1]
+    payload = token.split(".")[1]
     # add padding
     payload += "=" * ((4 - len(payload) % 4) % 4)
     payload_json = json.loads(base64.b64decode(payload))
     return payload_json
 
+
 def refresh_token():
     # check if current token expires in less than 2 hours
-    jwt_json = jwt_decode(BEARER_TOKEN)
-    if jwt_json['exp'] - time.time() < 7200:
+    jwt_json = jwt_decode(ACCESS_TOKEN)
+    if jwt_json["exp"] - time.time() < 7200:
         # expire in less than 2 hours
         # continue renewal
         url = "https://auth.tesla.com/oauth2/v3/token"
@@ -66,15 +74,15 @@ def refresh_token():
             "scope": "openid email offline_access",
         }
         result = base_req(url, method="post", json=payload)
-        BEARER_TOKEN_PATH.write_text(result['access_token'])
+        ACCESS_TOKEN_PATH.write_text(result["access_token"])
     else:
         # token is valid for mor then 2 hours
         # skip renewal
         return True
 
 
-if __name__ == "__main__":
-    refresh_token()
+def interactive():
+    # interactive user input mode
     cur_month = date.today().replace(day=1)
     prev_month = cur_month - timedelta(days=1)
 
@@ -102,101 +110,94 @@ if __name__ == "__main__":
             print("ERROR - Bitte Eingabe kontrollieren!")
             exit(1)
 
-    bearer_token = open("/opt/tesla-invoices/secrets/access_token.txt").read()
-    bearer_token = bearer_token.strip()
+    download_invoice(desired_invoice_date)
 
-    url_products = "https://owner-api.teslamotors.com/api/1/products?orders=true"
+
+def daemon():
+    # non interactive daemon mode, download current only current month
+    cur_month = date.today().replace(day=1)
+    download_invoice(cur_month)
+    pass
+
+
+def download_invoice(desired_invoice_date):
+    # refresh token befor any api request
+    refresh_token()
+
+    vehicles = get_vehicles()
     url_charging_base = "https://ownership.tesla.com/mobile-app/charging/"
-    headers = {
-        "Authorization": f"Bearer {bearer_token}",
-        "Content-Type": "application/json",
-        "x-tesla-user-agent": "TeslaApp/4.28.3-2167",
-    }
-
-    # get vehicle VINs
-    response = requests.get(url_products, headers=headers)
-    if response.status_code == 200:
-        products = response.json()["response"]
-        if products:
-            for product in products:
-                # check if product is vehicle (and therefore has a VIN)
-                if "vin" in product:
-                    vehicle_vin = product["vin"]
-                    if product["display_name"]:
-                        vehicle_display_name = product["display_name"]
-                        print(
-                            f"Processing vehicle {vehicle_vin} ({vehicle_display_name})..."
-                        )
-                    else:
-                        vehicle_display_name = ""
-                        print(f"Processing vehicle {vehicle_vin}...")
-
-                    # create API URL for vehicle VIN
-                    url_charging_history = f"{url_charging_base}history?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vehicle_vin}&operationName=getChargingHistoryV2"
-
-                    # get charging history for VIN
-                    response = requests.get(url_charging_history, headers=headers)
-                    if response.status_code == 200:
-                        charging_history = response.json()["data"]
-                        if charging_history:
-                            # iterate through all charging sessions
-                            for charging_session in charging_history:
-                                charging_session_datetime = datetime.fromisoformat(
-                                    charging_session["unlatchDateTime"]
-                                )
-                                charging_session_countrycode = charging_session[
-                                    "countryCode"
-                                ]
-
-                                # check for desired invoice date
-                                if (
-                                    charging_session_datetime.year
-                                    != desired_invoice_date.year
-                                ) or (
-                                    charging_session_datetime.month
-                                    != desired_invoice_date.month
-                                ):
-                                    if desired_invoice_date.year != 1999:
-                                        continue
-
-                                charging_session_invoices = charging_session["invoices"]
-                                # ignore free supercharging sessions (null)
-                                if charging_session_invoices:
-                                    for (
-                                        charging_session_invoice
-                                    ) in charging_session_invoices:
-                                        charging_session_invoice_id = (
-                                            charging_session_invoice["contentId"]
-                                        )
-                                        charging_session_invoice_filename = (
-                                            charging_session_invoice["fileName"]
-                                        )
-                                        url_charging_invoice = f"{url_charging_base}invoice/{charging_session_invoice_id}?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vehicle_vin}"
-
-                                        response = requests.get(
-                                            url_charging_invoice, headers=headers
-                                        )
-                                        if response.status_code == 200:
-                                            local_file_path = f"invoices/tesla_charging_invoice_{vehicle_vin}_{charging_session_datetime.strftime('%Y-%m-%d')}_{charging_session_countrycode}_{charging_session_invoice_filename}"
-                                            # open local file in binary write mode and write the content of the PDF in current dir
-                                            with open(local_file_path, "wb") as file:
-                                                file.write(response.content)
-                                            print(f"File '{local_file_path}' saved.")
-                                        else:
-                                            print(
-                                                f"ERROR - GET {url_charging_invoice} - {response.status_code} - {response.text}"
-                                            )
-                        else:
-                            print(
-                                f"ERROR - There are no charging sessions for vehicle {vehicle_vin}."
-                            )
-                    else:
-                        print(
-                            f"ERROR - GET {url_charging_history} - {response.status_code} - {response.text}"
-                        )
+    for vin, vehicle in vehicles.items():
+        if "display_name" in vehicle:
+            print(f"Processing vehicle {vehicle['vin']} - {vehicle['display_name']}...")
         else:
-            print("ERROR - No vehicles found.")
-    else:
-        print(f"ERROR - GET {url_products} - {response.status_code} - {response.text}")
+            print(f"Processing vehicle {vehicle['vin']}...")
 
-    print("DONE")
+        # create API URL for vehicle VIN
+        url_charging_history = f"{url_charging_base}history?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vehicle['vin']}&operationName=getChargingHistoryV2"
+        charging_sessions = base_req(url_charging_history)
+        save_invoice(charging_sessions["data"], desired_invoice_date)
+
+
+def get_charging_invoice(charging_session_invoice_id, vin):
+    url_charging_base = "https://ownership.tesla.com/mobile-app/charging/"
+    url_charging_invoice = f"{url_charging_base}invoice/{charging_session_invoice_id}?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vin}"
+
+    return base_req(url_charging_invoice)
+
+
+def save_invoice(charging_sessions, desired_invoice_date):
+    # make sure folder exists
+    INVOICE_PATH.mkdir(parents=True, exist_ok=True)
+
+    for charging_session in charging_sessions:
+        charging_session_datetime = datetime.fromisoformat(
+            charging_session["unlatchDateTime"]
+        )
+        charging_session_countrycode = charging_session["countryCode"]
+
+        # check for desired invoice date
+        if desired_invoice_date == 1990:
+            # 1990 means all invoices, if it is not 1990 skip this invoice
+            pass
+        elif charging_session_datetime.year != desired_invoice_date.year:
+            # wrong year -> skip
+            continue
+        elif charging_session_datetime.month != desired_invoice_date.month:
+            # correct year but bad month -> skip
+            continue
+
+        charging_session_invoices = charging_session["invoices"]
+        # ignore free supercharging sessions (null)
+        if charging_session_invoices:
+            for charging_session_invoice in charging_session_invoices:
+                charging_session_invoice_id = charging_session_invoice["contentId"]
+                charging_session_invoice_filename = charging_session_invoice["fileName"]
+                charging_invoice = get_charging_invoice(
+                    charging_session_invoice_id, charging_session["vin"]
+                )
+
+                local_file_path = (
+                    INVOICE_PATH
+                    / f"tesla_charging_invoice_{charging_session['vin']}_{charging_session_datetime.strftime('%Y-%m-%d')}_{charging_session_countrycode}_{charging_session_invoice_filename}"
+                )
+                local_file_path.write_bytes(charging_invoice.content)
+                print(f"File '{local_file_path}' saved.")
+
+
+def get_vehicles():
+    url_products = "https://owner-api.teslamotors.com/api/1/products?orders=true"
+    vehicles = {}
+    products = base_req(url=url_products)
+    for product in products["response"]:
+        # check if product is vehicle (and therefore has a VIN)
+        if "vin" in product:
+            vehicles[product["vin"]] = product
+    return vehicles
+
+
+if __name__ == "__main__":
+    if len(argv) > 1:
+        if argv[1] == "daemon":
+            daemon()
+    else:
+        interactive()
