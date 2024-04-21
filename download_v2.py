@@ -66,6 +66,7 @@ def refresh_token():
     if jwt_json["exp"] - time.time() < 7200:
         # expire in less than 2 hours
         # continue renewal
+        print("Refreshing token")
         url = "https://auth.tesla.com/oauth2/v3/token"
         payload = {
             "grant_type": "refresh_token",
@@ -75,6 +76,7 @@ def refresh_token():
         }
         result = base_req(url, method="post", json=payload)
         ACCESS_TOKEN_PATH.write_text(result["access_token"])
+        print("Sucesfully refreshed token")
     else:
         # token is valid for mor then 2 hours
         # skip renewal
