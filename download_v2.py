@@ -194,7 +194,7 @@ def save_invoice(charging_sessions, desired_invoice_date):
                 if local_file_path.exists():
                     # file already downloaded, skip
                     continue
-                
+
                 charging_invoice = get_charging_invoice(
                     charging_session_invoice_id, charging_session["vin"]
                 )
@@ -232,7 +232,7 @@ def send_mails():
         if "email_sent" in metadata:
             # email already sent, skip this invoice
             continue
-        
+
         email = EmailMessage()
 
         email["From"] = EMAIL_FROM
@@ -248,6 +248,7 @@ def send_mails():
         print(f"Sent Mail to {EMAIL_TO} for invoice {invoice.name}")
         metadata["email_sent"] = int(time.time())
         json.dump(metadata, metadata_file.open("w"), sort_keys=True, indent=4)
+
 
 if __name__ == "__main__":
     if len(argv) > 1:
