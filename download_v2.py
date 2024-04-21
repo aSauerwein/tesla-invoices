@@ -22,6 +22,11 @@ from sys import argv
 import os
 import smtplib
 from email.message import EmailMessage
+import logging
+
+# setup logger
+logger = logging.getLogger(__name__)
+logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
 
 REFRESH_TOKEN_PATH = Path(
     os.environ.get("REFRESH_TOKEN", "/opt/tesla-invoices/secrets/refresh_token.txt")
@@ -54,10 +59,11 @@ def base_req(url: str, method="get", json={}):
     }
     result = requests.request(method=method, url=url, headers=headers, json=json)
     result.raise_for_status()
-    try:
+    if "application/json" in result.headers.get("Content-Type"):
         return result.json()
-    except Exception as e:
-        # not json, could be text or binary(PDF)
+    elif "application/pdf" in result.headers.get("Content-Type"):
+        return result.content
+    else:
         return result
 
 
@@ -76,7 +82,7 @@ def refresh_token():
     if jwt_json["exp"] - time.time() < 7200:
         # expire in less than 2 hours
         # continue renewal
-        print("Refreshing token")
+        logger.info("Refreshing token")
         url = "https://auth.tesla.com/oauth2/v3/token"
         payload = {
             "grant_type": "refresh_token",
@@ -86,10 +92,11 @@ def refresh_token():
         }
         result = base_req(url, method="post", json=payload)
         ACCESS_TOKEN_PATH.write_text(result["access_token"])
-        print("Sucesfully refreshed token")
+        logger.info("Sucesfully refreshed token")
     else:
         # token is valid for mor then 2 hours
         # skip renewal
+        logger.debug("Token still valid for more then 2 hours")
         return True
 
 
@@ -127,22 +134,26 @@ def interactive():
 
 def daemon():
     # non interactive daemon mode, download current only current month
+    logger.debug("Starting in Daemon mode")
     cur_month = date.today().replace(day=1)
+    logger.debug("Downloading invoice of current month only")
     download_invoice(cur_month)
-    pass
 
 
 def download_invoice(desired_invoice_date):
     # refresh token befor any api request
+    logger.info(f"Desired Invoice Date: {desired_invoice_date} ")
     refresh_token()
 
     vehicles = get_vehicles()
     url_charging_base = "https://ownership.tesla.com/mobile-app/charging/"
     for vin, vehicle in vehicles.items():
         if "display_name" in vehicle:
-            print(f"Processing vehicle {vehicle['vin']} - {vehicle['display_name']}...")
+            logger.info(
+                f"Processing vehicle {vehicle['vin']} - {vehicle['display_name']}..."
+            )
         else:
-            print(f"Processing vehicle {vehicle['vin']}...")
+            logger.info(f"Processing vehicle {vehicle['vin']}...")
 
         # create API URL for vehicle VIN
         url_charging_history = f"{url_charging_base}history?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vehicle['vin']}&operationName=getChargingHistoryV2"
@@ -150,6 +161,8 @@ def download_invoice(desired_invoice_date):
         save_invoice(charging_sessions["data"], desired_invoice_date)
         if ENABLE_EMAIL_EXPORT:
             send_mails()
+
+        logger.info("DONE")
 
 
 def get_charging_invoice(charging_session_invoice_id, vin):
@@ -193,13 +206,17 @@ def save_invoice(charging_sessions, desired_invoice_date):
                 )
                 if local_file_path.exists():
                     # file already downloaded, skip
+                    logger.info(
+                        f"Invoice {charging_session_invoice_filename} already saved"
+                    )
                     continue
 
+                logger.info(f"Downloading {charging_session_invoice_filename}")
                 charging_invoice = get_charging_invoice(
                     charging_session_invoice_id, charging_session["vin"]
                 )
-                local_file_path.write_bytes(charging_invoice.content)
-                print(f"File '{local_file_path}' saved.")
+                local_file_path.write_bytes(charging_invoice)
+                logger.info(f"File '{local_file_path}' saved.")
 
 
 def get_vehicles():
@@ -222,7 +239,6 @@ def send_mails():
     for invoice in INVOICE_PATH.glob("*.pdf"):
         # look for a .json with the exact same name and path of the pdf
         metadata_file = Path(str(invoice).replace(".pdf", ".json"))
-        # TODO check if email for this invoice has already been sent
         if metadata_file.exists():
             metadata = json.load(metadata_file.open())
         else:
@@ -245,7 +261,7 @@ def send_mails():
             filename=invoice.name,
         )
         s.send_message(email)
-        print(f"Sent Mail to {EMAIL_TO} for invoice {invoice.name}")
+        logger.info(f"Sent Mail to {EMAIL_TO} for invoice {invoice.name}")
         metadata["email_sent"] = int(time.time())
         json.dump(metadata, metadata_file.open("w"), sort_keys=True, indent=4)
 
