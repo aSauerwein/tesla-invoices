@@ -1,2 +1,1 @@
-*/2 * * * * /usr/local/bin/python3 /opt/tesla-invoices/download_v2.py daemon > /proc/1/fd/1 2>&1
-* * * * * echo "HELLO!" > /proc/1/fd/1 2>&1
+0 */1 * * * /usr/local/bin/python3 /opt/tesla-invoices/download_v2.py daemon > /proc/1/fd/1 2>&1
