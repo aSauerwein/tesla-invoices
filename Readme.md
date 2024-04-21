@@ -13,8 +13,8 @@ $ docker build -t tesla-invoices .
 ```
 2. write refresh token and access token to `secrets/refresh_token.txt` and `secrets/access_token.txt`
 3. (optional) email export  
-    a. copy `docker.env.example` to `docker.env`
-    b. fill in all variables and set `ENABLE_EMAIL_EXPORT` to "True"
+    a. copy `docker.env.example` to `docker.env`  
+    b. fill in all variables and set `ENABLE_EMAIL_EXPORT` to "True"  
     c. start container with `--env-file`
     ```bash
     $ docker run -d --name tesla-invoices -v ./invoices:/opt/tesla-invoices/invoices -v ./secrets:/opt/tesla-invoices/secrets --env-file docker.env tesla-invoices
