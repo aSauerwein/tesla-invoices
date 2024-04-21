@@ -9,4 +9,5 @@ RUN apt update
 RUN apt install -y cron
 COPY crontab /etc/cron.d/
 RUN crontab /etc/cron.d/crontab
-ENTRYPOINT ["cron", "&&", "tail", "-f", "/var/log/cron.log"]
+COPY entrypoint.sh .
+ENTRYPOINT ["/opt/tesla-invoices/entrypoint.sh"]
