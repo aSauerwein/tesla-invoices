@@ -48,6 +48,8 @@ if Path("/data/options.json").exists():
         EMAIL_SERVER_PORT = options["email"]["port"]
         EMAIL_USER = options["email"]["user"]
         EMAIL_PASS = options["email"]["password"]
+    else:
+        ENABLE_EMAIL_EXPORT = False
 else:
     # get everything from environment variables
     REFRESH_TOKEN_PATH = Path(
