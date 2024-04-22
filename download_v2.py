@@ -147,7 +147,7 @@ def compare_access_token():
     try:
         options_access_token_json = jwt_decode(ACCESS_TOKEN)
     except Exception as e:
-        logging.warn(f"Could not Parse Access Token from Options, {e}")
+        logging.warning(f"Could not Parse Access Token from Options, {e}")
 
     if not file_access_token_json and not options_access_token_json:
         logging.error(
@@ -169,7 +169,7 @@ def compare_access_token():
         # nothing to do, ACCESS_TOKEN already set to options
         pass
     else:
-        logging.warn("Unhandled Case when comparing access tokens")
+        logging.warning("Unhandled Case when comparing access tokens")
 
 
 def compare_refresh_token():
