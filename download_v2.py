@@ -81,6 +81,7 @@ if not ACCESS_TOKEN:
     logger.error("Access Token not set")
     exit(1)
 
+sess = requests.session()
 
 def main():
     pass
@@ -92,7 +93,7 @@ def base_req(url: str, method="get", json={}):
         # "x-tesla-user-agent": "TeslaApp/4.28.3-2167",
     }
     logging.info(f"{method} Request to url: {url}")
-    result = requests.request(method=method, url=url, headers=headers, json=json)
+    result = sess.request(method=method, url=url, headers=headers, json=json)
     result.raise_for_status()
     if "application/json" in result.headers.get("Content-Type"):
         return result.json()
