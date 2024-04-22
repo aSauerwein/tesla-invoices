@@ -73,6 +73,14 @@ else:
     EMAIL_USER = os.environ.get("EMAIL_USER", "")
     EMAIL_PASS = os.environ.get("EMAIL_PASS", "")
 
+if not REFRESH_TOKEN:
+    logger.error("Refresh Token not set")
+    exit(1)
+
+if not ACCESS_TOKEN:
+    logger.error("Access Token not set")
+    exit(1)
+
 
 def main():
     pass
@@ -250,8 +258,8 @@ def save_invoice(charging_sessions, desired_invoice_date):
         charging_session_countrycode = charging_session["countryCode"]
 
         # check for desired invoice date
-        if desired_invoice_date == 1990:
-            # 1990 means all invoices, if it is not 1990 skip this invoice
+        if desired_invoice_date.year == 1999:
+            # 1999 means all invoices
             pass
         elif charging_session_datetime.year != desired_invoice_date.year:
             # wrong year -> skip
