@@ -28,24 +28,48 @@ import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
 
-REFRESH_TOKEN_PATH = Path(
-    os.environ.get("REFRESH_TOKEN", "/opt/tesla-invoices/secrets/refresh_token.txt")
-)
-REFRESH_TOKEN = REFRESH_TOKEN_PATH.read_text().strip()
-ACCESS_TOKEN_PATH = Path(
-    os.environ.get("ACCESS_TOKEN", "/opt/tesla-invoices/secrets/access_token.txt")
-)
-ACCESS_TOKEN = ACCESS_TOKEN_PATH.read_text().strip()
-# path to save invoices
-INVOICE_PATH = Path(os.environ.get("INVOICE_PATH", "/opt/tesla-invoices/invoices/"))
+if Path("/data/options.json").exists():
+    # running as HA Addon, parse all options from /data/options.json
+    options = json.load(Path("/data/options.json").open())
+    REFRESH_TOKEN_PATH = Path("/data/refresh_token.txt")
+    REFRESH_TOKEN = options[
+        "refresh_token"
+    ]  # refresh token from options, might be expired
+    ACCESS_TOKEN_PATH = Path("/data/access_token.txt")
+    ACCESS_TOKEN = options[
+        "access_token"
+    ]  # access token from options, might be expired
+    INVOICE_PATH = Path("/data/invoices/")
+    if options.get("enable_email_export", False):
+        ENABLE_EMAIL_EXPORT = True
+        EMAIL_FROM = options["email"]["from"]
+        EMAIL_TO = options["email"]["to"]
+        EMAIL_SERVER = options["email"]["mailserver"]
+        EMAIL_SERVER_PORT = options["email"]["port"]
+        EMAIL_USER = options["email"]["user"]
+        EMAIL_PASS = options["email"]["password"]
+else:
+    # get everything from environment variables
+    REFRESH_TOKEN_PATH = Path(
+        os.environ.get("REFRESH_TOKEN", "/opt/tesla-invoices/secrets/refresh_token.txt")
+    )
+    REFRESH_TOKEN = REFRESH_TOKEN_PATH.read_text().strip()
+    ACCESS_TOKEN_PATH = Path(
+        os.environ.get("ACCESS_TOKEN", "/opt/tesla-invoices/secrets/access_token.txt")
+    )
+    ACCESS_TOKEN = ACCESS_TOKEN_PATH.read_text().strip()
+    # path to save invoices
+    INVOICE_PATH = Path(os.environ.get("INVOICE_PATH", "/opt/tesla-invoices/invoices/"))
 
-ENABLE_EMAIL_EXPORT = os.environ.get("ENABLE_EMAIL_EXPORT", "False").lower() == "true"
-EMAIL_FROM = os.environ.get("EMAIL_FROM", "")
-EMAIL_TO = os.environ.get("EMAIL_TO", "")
-EMAIL_SERVER = os.environ.get("EMAIL_SERVER", "")
-EMAIL_SERVER_PORT = os.environ.get("EMAIL_SERVER_PORT", "587")
-EMAIL_USER = os.environ.get("EMAIL_USER", "")
-EMAIL_PASS = os.environ.get("EMAIL_PASS", "")
+    ENABLE_EMAIL_EXPORT = (
+        os.environ.get("ENABLE_EMAIL_EXPORT", "False").lower() == "true"
+    )
+    EMAIL_FROM = os.environ.get("EMAIL_FROM", "")
+    EMAIL_TO = os.environ.get("EMAIL_TO", "")
+    EMAIL_SERVER = os.environ.get("EMAIL_SERVER", "")
+    EMAIL_SERVER_PORT = os.environ.get("EMAIL_SERVER_PORT", "587")
+    EMAIL_USER = os.environ.get("EMAIL_USER", "")
+    EMAIL_PASS = os.environ.get("EMAIL_PASS", "")
 
 
 def main():
@@ -57,6 +81,7 @@ def base_req(url: str, method="get", json={}):
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         # "x-tesla-user-agent": "TeslaApp/4.28.3-2167",
     }
+    logging.info(f"{method} Request to url: {url}")
     result = requests.request(method=method, url=url, headers=headers, json=json)
     result.raise_for_status()
     if "application/json" in result.headers.get("Content-Type"):
@@ -76,7 +101,47 @@ def jwt_decode(token: str):
     return payload_json
 
 
+def compare_token():
+    global ACCESS_TOKEN
+    global REFRESH_TOKEN
+    # the tokens in options might be expired
+    # that's why we compare the options token with the token in the files
+    # files will be updated only if the options tokens are newer
+    if REFRESH_TOKEN_PATH.exists():
+        file_refresh_token = REFRESH_TOKEN_PATH.read_text().strip()
+        file_refresh_token_json = jwt_decode(file_refresh_token)
+        option_refresh_token_json = jwt_decode(REFRESH_TOKEN)
+        if option_refresh_token_json.get("iat", 0) > file_refresh_token_json.get(
+            "iat", 0
+        ):
+            # options is newer, write to file
+            REFRESH_TOKEN_PATH.write_text(REFRESH_TOKEN)
+        else:
+            # options is older, use token from file
+            REFRESH_TOKEN = REFRESH_TOKEN_PATH.read_text().strip()
+    else:
+        # no need to compare, create file
+        REFRESH_TOKEN_PATH.write_text(REFRESH_TOKEN)
+
+    if ACCESS_TOKEN_PATH.exists():
+        file_access_token = ACCESS_TOKEN_PATH.read_text().strip()
+        file_access_token_json = jwt_decode(file_access_token)
+        option_access_token_json = jwt_decode(ACCESS_TOKEN)
+        if option_access_token_json.get("iat", 0) > file_access_token_json.get(
+            "iat", 0
+        ):
+            # options is newer, write to file
+            ACCESS_TOKEN_PATH.write_text(ACCESS_TOKEN)
+        else:
+            # options is older, use token from file
+            ACCESS_TOKEN = ACCESS_TOKEN_PATH.read_text().strip()
+    else:
+        # no need to compare, create file
+        ACCESS_TOKEN_PATH.write_text(ACCESS_TOKEN)
+
+
 def refresh_token():
+    compare_token()
     # check if current token expires in less than 2 hours
     jwt_json = jwt_decode(ACCESS_TOKEN)
     if jwt_json["exp"] - time.time() < 7200:
@@ -231,10 +296,14 @@ def get_vehicles():
 
 
 def send_mails():
-    s = smtplib.SMTP(EMAIL_SERVER, EMAIL_SERVER_PORT)
-    s.ehlo()
-    s.starttls()
-    s.login(EMAIL_USER, EMAIL_PASS)
+    try:
+        s = smtplib.SMTP(EMAIL_SERVER, EMAIL_SERVER_PORT, timeout=20)
+        s.ehlo()
+        s.starttls()
+        s.login(EMAIL_USER, EMAIL_PASS)
+    except Exception as e:
+        logger.error(f"Failed to connect to mailserver: {e}")
+        return False
 
     for invoice in INVOICE_PATH.glob("*.pdf"):
         # look for a .json with the exact same name and path of the pdf
@@ -260,10 +329,13 @@ def send_mails():
             subtype="pdf",
             filename=invoice.name,
         )
-        s.send_message(email)
-        logger.info(f"Sent Mail to {EMAIL_TO} for invoice {invoice.name}")
-        metadata["email_sent"] = int(time.time())
-        json.dump(metadata, metadata_file.open("w"), sort_keys=True, indent=4)
+        try:
+            s.send_message(email)
+            logger.info(f"Sent Mail to {EMAIL_TO} for invoice {invoice.name}")
+            metadata["email_sent"] = int(time.time())
+            json.dump(metadata, metadata_file.open("w"), sort_keys=True, indent=4)
+        except smtplib.SMTPException as e:
+            logger.error(f" Failed to send mail: {e}")
 
 
 if __name__ == "__main__":
