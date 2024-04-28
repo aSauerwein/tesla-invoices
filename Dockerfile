@@ -1,5 +1,5 @@
-from python:latest
-RUN pip install requests
+from python:3.12-slim
+RUN pip install --no-cache-dir requests==2.31.0
 
 WORKDIR /opt/tesla-invoices
 COPY download_v2.py .
