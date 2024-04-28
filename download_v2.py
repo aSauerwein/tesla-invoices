@@ -216,6 +216,7 @@ def compare_refresh_token():
 
 
 def refresh_token():
+    global ACCESS_TOKEN
     if HOMEASSISTANT:
         compare_token()
     # check if current token expires in less than 2 hours
@@ -233,6 +234,7 @@ def refresh_token():
         }
         result = base_req(url, method="post", json=payload)
         ACCESS_TOKEN_PATH.write_text(result["access_token"])
+        ACCESS_TOKEN = result["access_token"]
         logger.info("Sucesfully refreshed token")
     else:
         # token is valid for mor then 2 hours
