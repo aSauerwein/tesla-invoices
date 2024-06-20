@@ -4,7 +4,7 @@
 Author: Dominik Steiner (dominik.steiner@nts.eu)
 Description: This script downloads all Tesla charging invoices for a given month.
 Usage: python3 dsteiner_tesla_invoices_download.py
-Version: 2.0
+Version: 3.0
 Date Created: 2024-02-05
 Changed: Changed Owner-API Endpoint to /products instead of /vehicles.
 Python Version: 3.11.7
@@ -52,6 +52,7 @@ if Path("/data/options.json").exists():
         EMAIL_PASS = options["email"]["password"]
     else:
         ENABLE_EMAIL_EXPORT = False
+    ENABLE_SUBSCRIPTION_INVOICE = options.get("enable_subscription_invoice", True)
 else:
     HOMEASSISTANT = False
     # get everything from environment variables
@@ -68,6 +69,9 @@ else:
 
     ENABLE_EMAIL_EXPORT = (
         os.environ.get("ENABLE_EMAIL_EXPORT", "False").lower() == "true"
+    )
+    ENABLE_SUBSCRIPTION_INVOICE = (
+        os.environ.get("ENABLE_SUBSCRIPTION_INVOICE", "True").lower() == "true"
     )
     EMAIL_FROM = os.environ.get("EMAIL_FROM", "")
     EMAIL_TO = os.environ.get("EMAIL_TO", "")
@@ -91,7 +95,7 @@ def main():
     pass
 
 
-def base_req(url: str, method="get", json={}):
+def base_req(url: str, method="get", json={}, *args, **kwargs):
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         # "x-tesla-user-agent": "TeslaApp/4.28.3-2167",
@@ -99,7 +103,9 @@ def base_req(url: str, method="get", json={}):
     logging.info(f"{method} Request to url: {url}")
     for attempt in range(3):
         try:
-            result = sess.request(method=method, url=url, headers=headers, json=json)
+            result = sess.request(
+                method=method, url=url, headers=headers, json=json, *args, **kwargs
+            )
             break
         except requests.exceptions.ChunkedEncodingError:
             logger.warning(f"incomplete read occured, attempt {attempt} of 3")
@@ -314,7 +320,21 @@ def download_invoice(desired_invoice_date):
         # create API URL for vehicle VIN
         url_charging_history = f"{url_charging_base}history?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vehicle['vin']}&operationName=getChargingHistoryV2"
         charging_sessions = base_req(url_charging_history)
-        save_invoice(charging_sessions["data"], desired_invoice_date)
+        save_charging_invoice(charging_sessions["data"], desired_invoice_date)
+
+        if ENABLE_SUBSCRIPTION_INVOICE:
+            logger.info("Subscription Invoice Enabled -> starting to download subscription invoices")
+            url_subcription_invoices = "https://ownership.tesla.com/mobile-app/subscriptions/invoices"
+            params_subscription_invoices = {
+                "deviceLanguage": "en",
+                "deviceCountry": "AT",
+                "httpLocale": "en_US",
+                "vin": vehicle["vin"],
+                "optionCode": "$CPF1",
+            }
+            subscription_invoices = base_req(url_subcription_invoices, params=params_subscription_invoices)
+            save_subscription_invoice(subscription_invoices["data"], desired_invoice_date, vehicle['vin'])
+
         if ENABLE_EMAIL_EXPORT:
             send_mails()
 
@@ -328,7 +348,18 @@ def get_charging_invoice(charging_session_invoice_id, vin):
     return base_req(url_charging_invoice)
 
 
-def save_invoice(charging_sessions, desired_invoice_date):
+def get_subscription_invoice(subscription_invoice_id, vin):
+    url_documents_invoice = f"https://ownership.tesla.com/mobile-app/documents/invoices/{subscription_invoice_id}"
+    params = {
+        "deviceLanguage": "en",
+        "deviceCountry": "AT",
+        "httpLocale": "en_US",
+        "vin": vin,
+    }
+    return base_req(url_documents_invoice, params=params)
+
+
+def save_charging_invoice(charging_sessions, desired_invoice_date):
     # make sure folder exists
     INVOICE_PATH.mkdir(parents=True, exist_ok=True)
 
@@ -373,6 +404,43 @@ def save_invoice(charging_sessions, desired_invoice_date):
                 )
                 local_file_path.write_bytes(charging_invoice)
                 logger.info(f"File '{local_file_path}' saved.")
+
+
+def save_subscription_invoice(subscription_invoices, desired_invoice_date, vin):
+    # make sure folder exists
+    INVOICE_PATH.mkdir(parents=True, exist_ok=True)
+
+    for invoice in subscription_invoices:
+        invoice_datetime = datetime.fromisoformat(
+            subscription_invoices[0]['InvoiceDate']
+        )
+
+        # check for desired invoice date
+        if desired_invoice_date.year == 1999:
+            # 1999 means all invoices
+            pass
+        elif invoice_datetime.year != desired_invoice_date.year:
+            # wrong year -> skip
+            continue
+        elif invoice_datetime.month != desired_invoice_date.month:
+            # correct year but bad month -> skip
+            continue
+
+        local_file_path = (
+            INVOICE_PATH
+            / f"tesla_subscription_invoice_{vin}_{invoice_datetime.strftime('%Y-%m-%d')}.pdf"
+        )
+        if local_file_path.exists():
+            # file already downloaded, skip
+            logger.info(
+                f"Invoice {invoice['InvoiceFileName']} already saved"
+            )
+            continue
+
+        logger.info(f"Downloading {invoice['InvoiceFileName']}")
+        subscription_invoice = get_subscription_invoice(invoice['InvoiceId'], vin)
+        local_file_path.write_bytes(subscription_invoice)
+        logger.info(f"File '{local_file_path}' saved.")
 
 
 def get_vehicles():
