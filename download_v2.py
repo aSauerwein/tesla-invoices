@@ -97,7 +97,7 @@ def base_req(url: str, method="get", json={}, *args, **kwargs):
             logger.warning(f"incomplete read occured, attempt {attempt} of 3")
             sleep(1)
     else:
-        logger.error(f"giving up after 3 tries")
+        logger.error("giving up after 3 tries")
         exit(1)
     result.raise_for_status()
     if "application/json" in result.headers.get("Content-Type"):
@@ -242,7 +242,7 @@ def interactive():
     prev_month = cur_month - timedelta(days=1)
 
     user_choice_month = input(
-        "Bitte gewünschten Monat im Format 'YYYY-MM' bzw. 'cur' oder 'prev' oder 'all' für aktuellen oder vorherigen Monat oder alles eingeben [prev]: "
+        "Bitte gewünschten Monat im Format 'YYYY-MM' bzw. 'cur' oder 'prev' oder 'all' für aktuellen oder vorherigen Monat oder alles eingeben [prev]: " # noqa
     )
     user_choice_month = user_choice_month.strip().lower()
 
@@ -254,12 +254,12 @@ def interactive():
         print(f"Using '{desired_invoice_date.strftime('%Y-%m')}'.")
     elif user_choice_month == "all":
         desired_invoice_date = datetime.strptime("1999-01", "%Y-%m")
-        print(f"Using 'all'.")
+        print("Using 'all'.")
     else:
         try:
             desired_invoice_date = datetime.strptime(user_choice_month, "%Y-%m")  # format: YYYY-MM
             print(f"Using '{desired_invoice_date.strftime('%Y-%m')}'.")
-        except:
+        except:  # noqa
             print("ERROR - Bitte Eingabe kontrollieren!")
             exit(1)
 
@@ -288,7 +288,7 @@ def download_invoice(desired_invoice_date):
             logger.info(f"Processing vehicle {vehicle['vin']}...")
 
         # create API URL for vehicle VIN
-        url_charging_history = f"{url_charging_base}history?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vehicle['vin']}&operationName=getChargingHistoryV2"
+        url_charging_history = f"{url_charging_base}history?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vehicle['vin']}&operationName=getChargingHistoryV2"  # noqa
         charging_sessions = base_req(url_charging_history)
         save_charging_invoice(charging_sessions["data"], desired_invoice_date)
 
@@ -313,7 +313,7 @@ def download_invoice(desired_invoice_date):
 
 def get_charging_invoice(charging_session_invoice_id, vin):
     url_charging_base = "https://ownership.tesla.com/mobile-app/charging/"
-    url_charging_invoice = f"{url_charging_base}invoice/{charging_session_invoice_id}?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vin}"
+    url_charging_invoice = f"{url_charging_base}invoice/{charging_session_invoice_id}?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vin}"  # noqa
 
     return base_req(url_charging_invoice)
 
@@ -357,7 +357,7 @@ def save_charging_invoice(charging_sessions, desired_invoice_date):
 
                 local_file_path = (
                     INVOICE_PATH
-                    / f"tesla_charging_invoice_{charging_session['vin']}_{charging_session_datetime.strftime('%Y-%m-%d')}_{charging_session_countrycode}_{charging_session_invoice_filename}"
+                    / f"tesla_charging_invoice_{charging_session['vin']}_{charging_session_datetime.strftime('%Y-%m-%d')}_{charging_session_countrycode}_{charging_session_invoice_filename}"  # noqa
                 )
                 if local_file_path.exists():
                     # file already downloaded, skip
