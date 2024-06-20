@@ -52,7 +52,7 @@ if Path("/data/options.json").exists():
     else:
         ENABLE_EMAIL_EXPORT = False
 else:
-    HOMEASSISTANT = True
+    HOMEASSISTANT = False
     # get everything from environment variables
     REFRESH_TOKEN_PATH = Path(
         os.environ.get("REFRESH_TOKEN", "/opt/tesla-invoices/secrets/refresh_token.txt")
