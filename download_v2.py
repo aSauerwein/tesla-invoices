@@ -166,8 +166,9 @@ def compare_access_token():
     elif file_access_token_json and not options_access_token_json:
         ACCESS_TOKEN = file_access_token
     elif not file_access_token_json and options_access_token_json:
-        # nothing to do, ACCESS_TOKEN already set to options
-        pass
+        # file does not exist an access token set in options
+        # write access token to file
+        ACCESS_TOKEN_PATH.write_text(ACCESS_TOKEN)
     else:
         logging.warning("Unhandled Case when comparing access tokens")
 
@@ -207,10 +208,12 @@ def compare_refresh_token():
             # nothing to do, REFRESH_TOKEN already set to options
             pass
     elif file_refresh_token_json and not options_refresh_token_json:
+        # file exists and nothing in options
         REFRESH_TOKEN = file_refresh_token
     elif not file_refresh_token_json and options_refresh_token_json:
-        # nothing to do, REFRESH_TOKEN already set to options
-        pass
+        # file does not exist and refresh token set in options
+        # write refresh token to file
+        REFRESH_TOKEN_PATH.write_text(REFRESH_TOKEN)
     else:
         logging.warning("Unhandled Case when comparing refresh tokens")
 
