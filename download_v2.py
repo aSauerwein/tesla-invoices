@@ -34,13 +34,9 @@ if Path("/data/options.json").exists():
     HOMEASSISTANT = True
     options = json.load(Path("/data/options.json").open())
     REFRESH_TOKEN_PATH = Path("/data/refresh_token.txt")
-    REFRESH_TOKEN = options[
-        "refresh_token"
-    ]  # refresh token from options, might be expired
+    REFRESH_TOKEN = options["refresh_token"]  # refresh token from options, might be expired
     ACCESS_TOKEN_PATH = Path("/data/access_token.txt")
-    ACCESS_TOKEN = options[
-        "access_token"
-    ]  # access token from options, might be expired
+    ACCESS_TOKEN = options["access_token"]  # access token from options, might be expired
     INVOICE_PATH = Path("/data/invoices/")
     if options.get("enable_email_export", False):
         ENABLE_EMAIL_EXPORT = True
@@ -56,23 +52,15 @@ if Path("/data/options.json").exists():
 else:
     HOMEASSISTANT = False
     # get everything from environment variables
-    REFRESH_TOKEN_PATH = Path(
-        os.environ.get("REFRESH_TOKEN", "/opt/tesla-invoices/secrets/refresh_token.txt")
-    )
+    REFRESH_TOKEN_PATH = Path(os.environ.get("REFRESH_TOKEN", "/opt/tesla-invoices/secrets/refresh_token.txt"))
     REFRESH_TOKEN = REFRESH_TOKEN_PATH.read_text().strip()
-    ACCESS_TOKEN_PATH = Path(
-        os.environ.get("ACCESS_TOKEN", "/opt/tesla-invoices/secrets/access_token.txt")
-    )
+    ACCESS_TOKEN_PATH = Path(os.environ.get("ACCESS_TOKEN", "/opt/tesla-invoices/secrets/access_token.txt"))
     ACCESS_TOKEN = ACCESS_TOKEN_PATH.read_text().strip()
     # path to save invoices
     INVOICE_PATH = Path(os.environ.get("INVOICE_PATH", "/opt/tesla-invoices/invoices/"))
 
-    ENABLE_EMAIL_EXPORT = (
-        os.environ.get("ENABLE_EMAIL_EXPORT", "False").lower() == "true"
-    )
-    ENABLE_SUBSCRIPTION_INVOICE = (
-        os.environ.get("ENABLE_SUBSCRIPTION_INVOICE", "True").lower() == "true"
-    )
+    ENABLE_EMAIL_EXPORT = os.environ.get("ENABLE_EMAIL_EXPORT", "False").lower() == "true"
+    ENABLE_SUBSCRIPTION_INVOICE = os.environ.get("ENABLE_SUBSCRIPTION_INVOICE", "True").lower() == "true"
     EMAIL_FROM = os.environ.get("EMAIL_FROM", "")
     EMAIL_TO = os.environ.get("EMAIL_TO", "")
     EMAIL_SERVER = os.environ.get("EMAIL_SERVER", "")
@@ -103,9 +91,7 @@ def base_req(url: str, method="get", json={}, *args, **kwargs):
     logging.info(f"{method} Request to url: {url}")
     for attempt in range(3):
         try:
-            result = sess.request(
-                method=method, url=url, headers=headers, json=json, *args, **kwargs
-            )
+            result = sess.request(method=method, url=url, headers=headers, json=json, *args, **kwargs)
             break
         except requests.exceptions.ChunkedEncodingError:
             logger.warning(f"incomplete read occured, attempt {attempt} of 3")
@@ -155,9 +141,7 @@ def compare_access_token():
             # see if token is valid
             file_access_token_json = jwt_decode(file_access_token)
         except Exception as e:
-            logging.warning(
-                f"Could not Parse Access Token from file {ACCESS_TOKEN_PATH}, {e}"
-            )
+            logging.warning(f"Could not Parse Access Token from file {ACCESS_TOKEN_PATH}, {e}")
 
     # try to get access token from options
     try:
@@ -166,15 +150,11 @@ def compare_access_token():
         logging.warning(f"Could not Parse Access Token from Options, {e}")
 
     if not file_access_token_json and not options_access_token_json:
-        logging.error(
-            "Could not find any valid access token from file or options, exiting"
-        )
+        logging.error("Could not find any valid access token from file or options, exiting")
         exit(1)
     elif file_access_token_json and options_access_token_json:
         # compare both tokens
-        if file_access_token_json.get("iat", 0) > options_access_token_json.get(
-            "iat", 0
-        ):
+        if file_access_token_json.get("iat", 0) > options_access_token_json.get("iat", 0):
             ACCESS_TOKEN = file_access_token
         else:
             # nothing to do, ACCESS_TOKEN already set to options
@@ -199,9 +179,7 @@ def compare_refresh_token():
             # see if token is valid
             file_refresh_token_json = jwt_decode(file_refresh_token)
         except Exception as e:
-            logging.warning(
-                f"Could not Parse Refresh Token from file {REFRESH_TOKEN_PATH}, {e}"
-            )
+            logging.warning(f"Could not Parse Refresh Token from file {REFRESH_TOKEN_PATH}, {e}")
 
     # try to get access token from options
     try:
@@ -210,15 +188,11 @@ def compare_refresh_token():
         logging.warning(f"Could not Parse Refresh Token from Options, {e}")
 
     if not file_refresh_token_json and not options_refresh_token_json:
-        logging.error(
-            "Could not find any valid refresh token from file or options, exiting"
-        )
+        logging.error("Could not find any valid refresh token from file or options, exiting")
         exit(1)
     elif file_refresh_token_json and options_refresh_token_json:
         # compare both tokens
-        if file_refresh_token_json.get("iat", 0) > options_refresh_token_json.get(
-            "iat", 0
-        ):
+        if file_refresh_token_json.get("iat", 0) > options_refresh_token_json.get("iat", 0):
             REFRESH_TOKEN = file_refresh_token
         else:
             # nothing to do, REFRESH_TOKEN already set to options
@@ -283,9 +257,7 @@ def interactive():
         print(f"Using 'all'.")
     else:
         try:
-            desired_invoice_date = datetime.strptime(
-                user_choice_month, "%Y-%m"
-            )  # format: YYYY-MM
+            desired_invoice_date = datetime.strptime(user_choice_month, "%Y-%m")  # format: YYYY-MM
             print(f"Using '{desired_invoice_date.strftime('%Y-%m')}'.")
         except:
             print("ERROR - Bitte Eingabe kontrollieren!")
@@ -311,9 +283,7 @@ def download_invoice(desired_invoice_date):
     url_charging_base = "https://ownership.tesla.com/mobile-app/charging/"
     for vin, vehicle in vehicles.items():
         if "display_name" in vehicle:
-            logger.info(
-                f"Processing vehicle {vehicle['vin']} - {vehicle['display_name']}..."
-            )
+            logger.info(f"Processing vehicle {vehicle['vin']} - {vehicle['display_name']}...")
         else:
             logger.info(f"Processing vehicle {vehicle['vin']}...")
 
@@ -333,7 +303,7 @@ def download_invoice(desired_invoice_date):
                 "optionCode": "$CPF1",
             }
             subscription_invoices = base_req(url_subcription_invoices, params=params_subscription_invoices)
-            save_subscription_invoice(subscription_invoices["data"], desired_invoice_date, vehicle['vin'])
+            save_subscription_invoice(subscription_invoices["data"], desired_invoice_date, vehicle["vin"])
 
         if ENABLE_EMAIL_EXPORT:
             send_mails()
@@ -364,9 +334,7 @@ def save_charging_invoice(charging_sessions, desired_invoice_date):
     INVOICE_PATH.mkdir(parents=True, exist_ok=True)
 
     for charging_session in charging_sessions:
-        charging_session_datetime = datetime.fromisoformat(
-            charging_session["unlatchDateTime"]
-        )
+        charging_session_datetime = datetime.fromisoformat(charging_session["unlatchDateTime"])
         charging_session_countrycode = charging_session["countryCode"]
 
         # check for desired invoice date
@@ -393,15 +361,11 @@ def save_charging_invoice(charging_sessions, desired_invoice_date):
                 )
                 if local_file_path.exists():
                     # file already downloaded, skip
-                    logger.info(
-                        f"Invoice {charging_session_invoice_filename} already saved"
-                    )
+                    logger.info(f"Invoice {charging_session_invoice_filename} already saved")
                     continue
 
                 logger.info(f"Downloading {charging_session_invoice_filename}")
-                charging_invoice = get_charging_invoice(
-                    charging_session_invoice_id, charging_session["vin"]
-                )
+                charging_invoice = get_charging_invoice(charging_session_invoice_id, charging_session["vin"])
                 local_file_path.write_bytes(charging_invoice)
                 logger.info(f"File '{local_file_path}' saved.")
 
@@ -411,9 +375,7 @@ def save_subscription_invoice(subscription_invoices, desired_invoice_date, vin):
     INVOICE_PATH.mkdir(parents=True, exist_ok=True)
 
     for invoice in subscription_invoices:
-        invoice_datetime = datetime.fromisoformat(
-            subscription_invoices[0]['InvoiceDate']
-        )
+        invoice_datetime = datetime.fromisoformat(subscription_invoices[0]["InvoiceDate"])
 
         # check for desired invoice date
         if desired_invoice_date.year == 1999:
@@ -427,18 +389,15 @@ def save_subscription_invoice(subscription_invoices, desired_invoice_date, vin):
             continue
 
         local_file_path = (
-            INVOICE_PATH
-            / f"tesla_subscription_invoice_{vin}_{invoice_datetime.strftime('%Y-%m-%d')}.pdf"
+            INVOICE_PATH / f"tesla_subscription_invoice_{vin}_{invoice_datetime.strftime('%Y-%m-%d')}.pdf"
         )
         if local_file_path.exists():
             # file already downloaded, skip
-            logger.info(
-                f"Invoice {invoice['InvoiceFileName']} already saved"
-            )
+            logger.info(f"Invoice {invoice['InvoiceFileName']} already saved")
             continue
 
         logger.info(f"Downloading {invoice['InvoiceFileName']}")
-        subscription_invoice = get_subscription_invoice(invoice['InvoiceId'], vin)
+        subscription_invoice = get_subscription_invoice(invoice["InvoiceId"], vin)
         local_file_path.write_bytes(subscription_invoice)
         logger.info(f"File '{local_file_path}' saved.")
 
