@@ -23,6 +23,7 @@ import os
 import smtplib
 from email.message import EmailMessage
 import logging
+from time import sleep
 
 # setup logger
 logger = logging.getLogger(__name__)
@@ -96,7 +97,16 @@ def base_req(url: str, method="get", json={}):
         # "x-tesla-user-agent": "TeslaApp/4.28.3-2167",
     }
     logging.info(f"{method} Request to url: {url}")
-    result = sess.request(method=method, url=url, headers=headers, json=json)
+    for attempt in range(3):
+        try:
+            result = sess.request(method=method, url=url, headers=headers, json=json)
+            break
+        except requests.exceptions.ChunkedEncodingError:
+            logger.warning(f"incomplete read occured, attempt {attempt} of 3")
+            sleep(1)
+    else:
+        logger.error(f"giving up after 3 tries")
+        exit(1)
     result.raise_for_status()
     if "application/json" in result.headers.get("Content-Type"):
         return result.json()
