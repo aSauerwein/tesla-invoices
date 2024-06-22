@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 """
-Author: Dominik Steiner (dominik.steiner@nts.eu)
+Author: Dominik Steiner (dominik.steiner@nts.eu), Andreas Sauerwein-Schlosser (andreas@sauerwein.se)
 Description: This script downloads all Tesla charging invoices for a given month.
 Usage: python3 dsteiner_tesla_invoices_download.py
-Version: 3.0
+Version: 0.6.0
 Date Created: 2024-02-05
 Changed: Changed Owner-API Endpoint to /products instead of /vehicles.
 Python Version: 3.11.7
