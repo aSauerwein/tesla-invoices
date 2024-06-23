@@ -4,7 +4,7 @@
 Author: Dominik Steiner (dominik.steiner@nts.eu), Andreas Sauerwein-Schlosser (andreas@sauerwein.se)
 Description: This script downloads all Tesla charging invoices for a given month.
 Usage: python3 dsteiner_tesla_invoices_download.py
-Version: 0.6.0
+Version: 0.6.1
 Date Created: 2024-02-05
 Changed: Changed Owner-API Endpoint to /products instead of /vehicles.
 Python Version: 3.11.7
@@ -95,7 +95,7 @@ def base_req(url: str, method="get", json={}, *args, **kwargs):
             break
         except requests.exceptions.ChunkedEncodingError:
             logger.warning(f"incomplete read occured, attempt {attempt} of 3")
-            sleep(1)
+            sleep(attempt * 3 + 1)  # sleep for 1, 4, 7 seconds
     else:
         logger.error("giving up after 3 tries")
         exit(1)
@@ -242,7 +242,7 @@ def interactive():
     prev_month = cur_month - timedelta(days=1)
 
     user_choice_month = input(
-        "Bitte gewünschten Monat im Format 'YYYY-MM' bzw. 'cur' oder 'prev' oder 'all' für aktuellen oder vorherigen Monat oder alles eingeben [prev]: " # noqa
+        "Bitte gewünschten Monat im Format 'YYYY-MM' bzw. 'cur' oder 'prev' oder 'all' für aktuellen oder vorherigen Monat oder alles eingeben [prev]: "  # noqa
     )
     user_choice_month = user_choice_month.strip().lower()
 
@@ -375,7 +375,7 @@ def save_subscription_invoice(subscription_invoices, desired_invoice_date, vin):
     INVOICE_PATH.mkdir(parents=True, exist_ok=True)
 
     for invoice in subscription_invoices:
-        invoice_datetime = datetime.fromisoformat(subscription_invoices[0]["InvoiceDate"])
+        invoice_datetime = datetime.fromisoformat(invoice["InvoiceDate"])
 
         # check for desired invoice date
         if desired_invoice_date.year == 1999:
@@ -393,7 +393,7 @@ def save_subscription_invoice(subscription_invoices, desired_invoice_date, vin):
         )
         if local_file_path.exists():
             # file already downloaded, skip
-            logger.info(f"Invoice {invoice['InvoiceFileName']} already saved")
+            logger.info(f"Invoice - {invoice['InvoiceFileName']} already saved to {local_file_path}")
             continue
 
         logger.info(f"Downloading {invoice['InvoiceFileName']}")
