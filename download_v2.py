@@ -95,7 +95,7 @@ def base_req(url: str, method="get", json={}, *args, **kwargs):
             break
         except requests.exceptions.ChunkedEncodingError:
             logger.warning(f"incomplete read occured, attempt {attempt} of 3")
-            sleep(1)
+            sleep(attempt * 3 + 1)  # sleep for 1, 4, 7 seconds
     else:
         logger.error("giving up after 3 tries")
         exit(1)
