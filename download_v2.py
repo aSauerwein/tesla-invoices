@@ -242,7 +242,7 @@ def interactive():
     prev_month = cur_month - timedelta(days=1)
 
     user_choice_month = input(
-        "Bitte gewünschten Monat im Format 'YYYY-MM' bzw. 'cur' oder 'prev' oder 'all' für aktuellen oder vorherigen Monat oder alles eingeben [prev]: " # noqa
+        "Bitte gewünschten Monat im Format 'YYYY-MM' bzw. 'cur' oder 'prev' oder 'all' für aktuellen oder vorherigen Monat oder alles eingeben [prev]: "  # noqa
     )
     user_choice_month = user_choice_month.strip().lower()
 
@@ -375,7 +375,7 @@ def save_subscription_invoice(subscription_invoices, desired_invoice_date, vin):
     INVOICE_PATH.mkdir(parents=True, exist_ok=True)
 
     for invoice in subscription_invoices:
-        invoice_datetime = datetime.fromisoformat(subscription_invoices[0]["InvoiceDate"])
+        invoice_datetime = datetime.fromisoformat(invoice["InvoiceDate"])
 
         # check for desired invoice date
         if desired_invoice_date.year == 1999:
@@ -393,7 +393,7 @@ def save_subscription_invoice(subscription_invoices, desired_invoice_date, vin):
         )
         if local_file_path.exists():
             # file already downloaded, skip
-            logger.info(f"Invoice {invoice['InvoiceFileName']} already saved")
+            logger.info(f"Invoice - {invoice['InvoiceFileName']} already saved to {local_file_path}")
             continue
 
         logger.info(f"Downloading {invoice['InvoiceFileName']}")
