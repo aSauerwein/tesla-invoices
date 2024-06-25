@@ -64,7 +64,7 @@ else:
     EMAIL_FROM = os.environ.get("EMAIL_FROM", "")
     EMAIL_TO = os.environ.get("EMAIL_TO", "")
     EMAIL_SERVER = os.environ.get("EMAIL_SERVER", "")
-    EMAIL_SERVER_PORT = os.environ.get("EMAIL_SERVER_PORT", "587")
+    EMAIL_SERVER_PORT = int(os.environ.get("EMAIL_SERVER_PORT", "587"))
     EMAIL_USER = os.environ.get("EMAIL_USER", "")
     EMAIL_PASS = os.environ.get("EMAIL_PASS", "")
 
