@@ -2,7 +2,7 @@
 printenv >> /etc/environment
 if [ -f "/data/options.json" ]; then
     # running in HA, start webserver
-    caddy file-server --browse --root /data/invoices/ --listen :9000 & 
+    caddy run --config /opt/tesla-invoices/Caddyfile --adapter caddyfile &
 fi
 
 # trigger download once on startup
