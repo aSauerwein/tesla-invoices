@@ -17,5 +17,6 @@ RUN apt install -y caddy
 
 COPY crontab /etc/cron.d/
 RUN crontab /etc/cron.d/crontab
+COPY Caddyfile .
 COPY entrypoint.sh .
 ENTRYPOINT ["/opt/tesla-invoices/entrypoint.sh"]

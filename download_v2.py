@@ -4,7 +4,7 @@
 Author: Dominik Steiner (dominik.steiner@nts.eu), Andreas Sauerwein-Schlosser (andreas@sauerwein.se)
 Description: This script downloads all Tesla charging invoices for a given month.
 Usage: python3 dsteiner_tesla_invoices_download.py
-Version: 0.6.1
+Version: 0.6.2
 Date Created: 2024-02-05
 Changed: Changed Owner-API Endpoint to /products instead of /vehicles.
 Python Version: 3.11.7
@@ -64,7 +64,7 @@ else:
     EMAIL_FROM = os.environ.get("EMAIL_FROM", "")
     EMAIL_TO = os.environ.get("EMAIL_TO", "")
     EMAIL_SERVER = os.environ.get("EMAIL_SERVER", "")
-    EMAIL_SERVER_PORT = os.environ.get("EMAIL_SERVER_PORT", "587")
+    EMAIL_SERVER_PORT = int(os.environ.get("EMAIL_SERVER_PORT", "587"))
     EMAIL_USER = os.environ.get("EMAIL_USER", "")
     EMAIL_PASS = os.environ.get("EMAIL_PASS", "")
 
@@ -290,7 +290,7 @@ def download_invoice(desired_invoice_date):
         # create API URL for vehicle VIN
         url_charging_history = f"{url_charging_base}history?deviceLanguage=en&deviceCountry=AT&httpLocale=en_US&vin={vehicle['vin']}&operationName=getChargingHistoryV2"  # noqa
         charging_sessions = base_req(url_charging_history)
-        save_charging_invoice(charging_sessions["data"], desired_invoice_date)
+        save_charging_invoice(charging_sessions["data"], desired_invoice_date, vehicle["vin"])
 
         if ENABLE_SUBSCRIPTION_INVOICE:
             logger.info("Subscription Invoice Enabled -> starting to download subscription invoices")
@@ -329,7 +329,7 @@ def get_subscription_invoice(subscription_invoice_id, vin):
     return base_req(url_documents_invoice, params=params)
 
 
-def save_charging_invoice(charging_sessions, desired_invoice_date):
+def save_charging_invoice(charging_sessions, desired_invoice_date, vin):
     # make sure folder exists
     INVOICE_PATH.mkdir(parents=True, exist_ok=True)
 
@@ -357,7 +357,7 @@ def save_charging_invoice(charging_sessions, desired_invoice_date):
 
                 local_file_path = (
                     INVOICE_PATH
-                    / f"tesla_charging_invoice_{charging_session['vin']}_{charging_session_datetime.strftime('%Y-%m-%d')}_{charging_session_countrycode}_{charging_session_invoice_filename}"  # noqa
+                    / f"tesla_charging_invoice_{vin}_{charging_session_datetime.strftime('%Y-%m-%d')}_{charging_session_countrycode}_{charging_session_invoice_filename}"  # noqa
                 )
                 if local_file_path.exists():
                     # file already downloaded, skip
@@ -365,7 +365,7 @@ def save_charging_invoice(charging_sessions, desired_invoice_date):
                     continue
 
                 logger.info(f"Downloading {charging_session_invoice_filename}")
-                charging_invoice = get_charging_invoice(charging_session_invoice_id, charging_session["vin"])
+                charging_invoice = get_charging_invoice(charging_session_invoice_id, vin)
                 local_file_path.write_bytes(charging_invoice)
                 logger.info(f"File '{local_file_path}' saved.")
 
@@ -426,10 +426,11 @@ def send_mails():
     for invoice in INVOICE_PATH.glob("*.pdf"):
         # look for a .json with the exact same name and path of the pdf
         metadata_file = Path(str(invoice).replace(".pdf", ".json"))
-        if metadata_file.exists():
+        # only read metadata if the file has content; empty/missing means "not sent yet".
+        # don't create the file here - it's written only after a successful send (issue #6)
+        if metadata_file.exists() and metadata_file.stat().st_size > 0:
             metadata = json.load(metadata_file.open())
         else:
-            metadata_file.touch()
             metadata = {}
 
         if "email_sent" in metadata:
