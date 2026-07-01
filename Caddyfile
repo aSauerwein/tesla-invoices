@@ -3,13 +3,15 @@
 
 	# issue #8: default the browse listing to newest-modified-first.
 	# Caddy's file browser reads ?sort=&order= from the query, so redirect the
-	# bare root once to the sorted view. The "not query sort=time" guard stops
-	# the redirect from looping on the already-sorted URL.
+	# bare root once to the sorted view. The target is RELATIVE (no leading "/")
+	# so it stays inside the Home Assistant ingress path prefix instead of
+	# escaping to the HA root. The "not query sort=time" guard stops the
+	# redirect from looping on the already-sorted URL.
 	@unsorted {
 		path /
 		not query sort=time
 	}
-	redir @unsorted "/?sort=time&order=desc"
+	redir @unsorted "?sort=time&order=desc"
 
 	file_server browse
 }
