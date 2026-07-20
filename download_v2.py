@@ -13,6 +13,7 @@ Notice: This software is provided "as is" and without any warranty. Use at your 
 """
 
 import requests
+import ssl
 from datetime import date, datetime, timedelta
 from pathlib import Path
 import base64
@@ -24,6 +25,7 @@ import smtplib
 from email.message import EmailMessage
 import logging
 from time import sleep
+from requests.adapters import HTTPAdapter
 
 # setup logger
 logger = logging.getLogger(__name__)
@@ -76,7 +78,38 @@ else:
 #     logger.error("Access Token not set")
 #     exit(1)
 
-sess = requests.session()
+if not ssl.HAS_TLSv1_3:
+    raise RuntimeError("TLSv1.3 support is required by Tesla API calls")
+
+
+def tls13_context() -> ssl.SSLContext:
+    context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_3
+    context.maximum_version = ssl.TLSVersion.TLSv1_3
+    return context
+
+
+class TLS13Adapter(HTTPAdapter):
+    def __init__(self, *args, **kwargs):
+        self._ssl_context = tls13_context()
+        super().__init__(*args, **kwargs)
+
+    def init_poolmanager(self, connections, maxsize, block=False, **pool_kwargs):
+        pool_kwargs["ssl_context"] = self._ssl_context
+        return super().init_poolmanager(connections, maxsize, block, **pool_kwargs)
+
+    def proxy_manager_for(self, proxy, **proxy_kwargs):
+        proxy_kwargs["ssl_context"] = self._ssl_context
+        return super().proxy_manager_for(proxy, **proxy_kwargs)
+
+
+def create_session() -> requests.Session:
+    session = requests.session()
+    session.mount("https://", TLS13Adapter())
+    return session
+
+
+sess = create_session()
 
 
 def main():
