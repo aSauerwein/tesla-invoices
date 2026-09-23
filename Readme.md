@@ -1,4 +1,15 @@
 # Dsteiner Telsa Invoices
+
+> ## ⚠️ This repository is archived / unmaintained
+> I am not continuing work on this project, and this repository will be archived.
+> Please use the actively maintained project of dsteiner instead:
+> **<https://github.com/steiner-dominik/tesla-invoices>**
+>
+> It is a full rewrite of the same idea (with a dashboard, email export and
+> Home Assistant integration) and is where current development happens.
+> Existing open issues here (e.g. #11, fixed by the TLSv1.3 change in
+> <https://github.com/aSauerwein/tesla-invoices/pull/10>) will not be acted on.
+
 dsteiner script as docker container, capable of refreshing tokens automatically
 
 ## Security Risk
